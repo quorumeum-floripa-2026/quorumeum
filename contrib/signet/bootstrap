@@ -163,22 +163,10 @@ def main():
                         help="bitcoin-cli command (default: bitcoin-cli)")
     parser.add_argument("--p2p-host", default="127.0.0.1", type=str,
                         help="Local node P2P host (default: 127.0.0.1)")
-    parser.add_argument("--p2p-port", required=True, type=int,
+    parser.add_argument("--p2p-port", default=38333, type=int,
                         help="Local node P2P port")
     parser.add_argument("--timeout", default=60, type=int,
                         help="Seconds without a block before triggering (default: 60)")
-    parser.add_argument("--grind-cmd", default=None, type=str,
-                        help="PoW grind command (for internal key fast-path)")
-    parser.add_argument("--debug", action="store_true",
-                        help="Enable debug logging")
-    parser.add_argument("--quiet", action="store_true",
-                        help="Only log warnings and errors")
-
-    payto = parser.add_mutually_exclusive_group(required=True)
-    payto.add_argument("--address", default=None, type=str,
-                       help="Coinbase reward address")
-    payto.add_argument("--descriptor", default=None, type=str,
-                       help="Coinbase reward descriptor")
 
     args = parser.parse_args()
 
@@ -186,10 +174,7 @@ def main():
         shlex.split(args.cli), list(a), input=input, **kwargs)
     args.derived_addresses = {}
 
-    if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-    elif args.quiet:
-        logging.getLogger().setLevel(logging.WARNING)
+    logging.getLogger().setLevel(logging.DEBUG)
 
     do_bootstrap(args)
 
