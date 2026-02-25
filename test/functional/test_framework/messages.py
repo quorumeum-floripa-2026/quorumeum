@@ -1667,6 +1667,24 @@ class msg_sendcmpct:
     def __repr__(self):
         return "msg_sendcmpct(announce=%s, version=%lu)" % (self.announce, self.version)
 
+class msg_signetpsbt:
+    from test_framework.psbt import PSBT
+
+    __slots__ = ("psbt")
+    msgtype =  b"signetpsbt"
+
+    def __init__(self, psbt=PSBT()):
+        self.psbt = psbt
+
+    def deserialize(self, f):
+        from test_framework.psbt import PSBT
+        self.psbt = PSBT.deserialize(f)
+
+    def serialize(self):
+        return self.psbt.serialize()
+
+    def __repr__(self):
+        return "msg_signetpsbt(psbt={})".format(self.psbt)
 
 class msg_cmpctblock:
     __slots__ = ("header_and_shortids",)
