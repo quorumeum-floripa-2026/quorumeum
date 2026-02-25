@@ -64,6 +64,7 @@ from test_framework.messages import (
     msg_sendcmpct,
     msg_sendheaders,
     msg_sendtxrcncl,
+    msg_signetpsbt,
     msg_tx,
     MSG_TX,
     MSG_TYPE_MASK,
@@ -142,6 +143,7 @@ MESSAGEMAP = {
     b"sendcmpct": msg_sendcmpct,
     b"sendheaders": msg_sendheaders,
     b"sendtxrcncl": msg_sendtxrcncl,
+    b"signetpsbt": msg_signetpsbt,
     b"tx": msg_tx,
     b"verack": msg_verack,
     b"version": msg_version,
@@ -180,7 +182,7 @@ class P2PConnection(asyncio.Protocol):
     def supports_v2_p2p(self):
         return self.v2_state is not None
 
-    def peer_connect_helper(self, dstaddr, dstport, net, timeout_factor):
+    def peer_connect_helper(self, dstaddr, dstport, net, timeout_factor, magic_bytes=None):
         assert not self.is_connected
         self.timeout_factor = timeout_factor
         self.dstaddr = dstaddr
@@ -188,11 +190,11 @@ class P2PConnection(asyncio.Protocol):
         # The initial message to send after the connection was made:
         self.on_connection_send_msg = None
         self.recvbuf = b""
-        self.magic_bytes = MAGIC_BYTES[net]
+        self.magic_bytes = magic_bytes if magic_bytes is not None else MAGIC_BYTES[net]
         self.p2p_connected_to_node = dstport != 0
 
-    def peer_connect(self, dstaddr, dstport, *, net, timeout_factor, supports_v2_p2p):
-        self.peer_connect_helper(dstaddr, dstport, net, timeout_factor)
+    def peer_connect(self, dstaddr, dstport, *, net, timeout_factor, supports_v2_p2p, magic_bytes=None):
+        self.peer_connect_helper(dstaddr, dstport, net, timeout_factor, magic_bytes)
         if supports_v2_p2p:
             self.v2_state = EncryptedP2PState(initiating=True, net=net)
 
@@ -556,6 +558,7 @@ class P2PInterface(P2PConnection):
     def on_sendcmpct(self, message): pass
     def on_sendheaders(self, message): pass
     def on_sendtxrcncl(self, message): pass
+    def on_signetpsbt(self, message): pass
     def on_tx(self, message): pass
     def on_wtxidrelay(self, message): pass
 

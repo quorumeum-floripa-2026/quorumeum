@@ -3735,6 +3735,9 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         // 5.1 Otherwise: Continue to relay the PSBT without further adjustment to peers
         // for peer in peers:
             //MakeAndPushMessage(peer, NetMsgType::SIGNETPSBT, blocktemplate);
+        
+        // Adding this just to have something to test for now
+        LogDebug(BCLog::NET, "Processed signetpsbt message from peer=%d\n", pfrom.GetId());
     }
 
     if (msg_type == NetMsgType::SENDHEADERS) {
