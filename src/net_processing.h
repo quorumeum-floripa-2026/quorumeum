@@ -12,6 +12,7 @@
 #include <protocol.h>
 #include <threadsafety.h>
 #include <validationinterface.h>
+#include "interfaces/wallet.h"
 
 #include <atomic>
 #include <chrono>
@@ -91,7 +92,7 @@ public:
 
     static std::unique_ptr<PeerManager> make(CConnman& connman, AddrMan& addrman,
                                              BanMan* banman, ChainstateManager& chainman,
-                                             CTxMemPool& pool, node::Warnings& warnings, Options opts);
+                                             CTxMemPool& pool, node::Warnings& warnings, Options opts, interfaces::WalletLoader& wallet_loader);
     virtual ~PeerManager() = default;
 
     /**

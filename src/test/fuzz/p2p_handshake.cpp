@@ -44,6 +44,7 @@ FUZZ_TARGET(p2p_handshake, .init = ::initialize)
 
     auto& connman = static_cast<ConnmanTestMsg&>(*g_setup->m_node.connman);
     auto& chainman = static_cast<TestChainstateManager&>(*g_setup->m_node.chainman);
+    auto& wallet_loader = static_cast<interfaces::WalletLoader&>(*g_setup->m_node.wallet_loader);
     SetMockTime(1610000000); // any time to successfully reset ibd
     chainman.ResetIbd();
 
@@ -56,7 +57,8 @@ FUZZ_TARGET(p2p_handshake, .init = ::initialize)
                                      PeerManager::Options{
                                          .reconcile_txs = true,
                                          .deterministic_rng = true,
-                                     });
+                                     },
+                                     wallet_loader);
     connman.SetMsgProc(peerman.get());
 
     LOCK(NetEventsInterface::g_msgproc_mutex);

@@ -1363,6 +1363,27 @@ class msg_block:
         return "msg_block(block=%s)" % (repr(self.block))
 
 
+class msg_signetpsbt:
+    __slots__ = ("psbt", "block")
+    msgtype = b"signetpsbt"
+
+    def __init__(self, psbt=None, block=None):
+        self.psbt = psbt
+        self.block = block
+
+    def deserialize(self, f):
+        from test_framework.psbt import PSBT
+        self.psbt = from_binary(PSBT, f)
+        self.block = from_binary(CBlock, f)
+        return self
+
+    def serialize(self):
+        return self.psbt.serialize() + self.block.serialize(with_witness=True)
+
+    def __repr__(self):
+        return "msg_signetpsbt(psbt=%s, block=%s)" % (repr(self.psbt), repr(self.block))
+
+
 # Generic type to control the raw bytes sent over the wire.
 # The msgtype and the data must be provided.
 class msg_generic:

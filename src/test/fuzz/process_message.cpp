@@ -85,7 +85,8 @@ FUZZ_TARGET(process_message, .init = initialize_process_message)
                                      PeerManager::Options{
                                          .reconcile_txs = true,
                                          .deterministic_rng = true,
-                                     });
+                                     },
+                                     *g_setup->m_node.wallet_loader);
 
     connman.SetMsgProc(peerman.get());
     LOCK(NetEventsInterface::g_msgproc_mutex);

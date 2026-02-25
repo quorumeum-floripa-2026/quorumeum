@@ -356,7 +356,7 @@ TestingSetup::TestingSetup(
     m_node.peerman = PeerManager::make(*m_node.connman, *m_node.addrman,
                                        m_node.banman.get(), *m_node.chainman,
                                        *m_node.mempool, *m_node.warnings,
-                                       peerman_opts);
+                                       peerman_opts, *m_node.wallet_loader);
 
     {
         CConnman::Options options;

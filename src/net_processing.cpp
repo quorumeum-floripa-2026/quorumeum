@@ -3,6 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "interfaces/wallet.h"
 #include <net_processing.h>
 
 #include <addrman.h>
@@ -45,6 +46,7 @@
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <protocol.h>
+#include <psbt.h>
 #include <random.h>
 #include <scheduler.h>
 #include <script/script.h>
@@ -497,12 +499,66 @@ struct CNodeState {
     int64_t m_last_block_announcement{0};
 };
 
+/** For each blocks store the best PSBT conbination with all signatures seen
+ * Use this cache to avoid spaming your peers with blocks and psbt that they have
+ * already seen. Only should relay a finalized block if finalize = true, meaning
+ * that it has all needed signatures.
+ * Empty the cache with clean_cache when a new block is found.
+*/
+struct PeerPSBTCache {
+
+    /** For each block seen, store the best combined PSBT
+     * and if the PSBT has enough signatures */
+    struct BlockSignatureState {
+        PartiallySignedTransaction m_bestpsbt;
+        /** If we reached the min threashold */
+        bool finalized{false};
+    };
+
+    /** Store for each block the best PSBT*/
+    std::map<uint256, BlockSignatureState> m_block_sigs;
+
+    /** Empty the cache. Should be called when a new block is found */
+    void clean_cache()
+    {
+        m_block_sigs.clear();
+    };
+
+    /** Add the signatures and signers that we don't have cache.
+     * Returns true if the PSBT changed and should be retransmited to all peers. */
+    bool add_signers(uint256 block_hash, PartiallySignedTransaction psbt)
+    {
+        bool merge_succeed = m_block_sigs[block_hash].m_bestpsbt.Merge(psbt);
+        if (!merge_succeed)
+        {
+            LogDebug(BCLog::SIGNETPSBT, "Merge the PSBTs was not possible, returned an error.\n");
+        }
+        else
+        {
+            size_t unsigned_inputs = CountPSBTUnsignedInputs(m_block_sigs[block_hash].m_bestpsbt);
+            if(unsigned_inputs == 0)
+            {
+                LogDebug(BCLog::SIGNETPSBT, "The PSBT has the needed signatures and can be retransmited.\n");
+                m_block_sigs[block_hash].finalized = true;
+            }
+            LogDebug(BCLog::SIGNETPSBT, "PSBTs merged, missing %d signatures.\n", unsigned_inputs);
+            return true;
+        }
+
+        return false;
+    }
+};
+
+
 class PeerManagerImpl final : public PeerManager
 {
 public:
     PeerManagerImpl(CConnman& connman, AddrMan& addrman,
                     BanMan* banman, ChainstateManager& chainman,
-                    CTxMemPool& pool, node::Warnings& warnings, Options opts);
+                    CTxMemPool& pool, node::Warnings& warnings, Options opts, interfaces::WalletLoader& wallet_loader);
+
+    /** Cache used to store the PSBTs for each block */
+    PeerPSBTCache psbt_cache;
 
     /** Overridden from CValidationInterface. */
     void ActiveTipChange(const CBlockIndex& new_tip, bool) override
@@ -779,6 +835,10 @@ private:
     TimeOffsets m_outbound_time_offsets{m_warnings};
 
     const Options m_opts;
+
+    interfaces::WalletLoader& m_wallet_loader;
+
+    std::unique_ptr<interfaces::Wallet> GetQuorumWallet();
 
     bool RejectIncomingTxs(const CNode& peer) const;
 
@@ -1877,14 +1937,14 @@ std::optional<std::string> PeerManagerImpl::FetchBlock(NodeId peer_id, const CBl
 
 std::unique_ptr<PeerManager> PeerManager::make(CConnman& connman, AddrMan& addrman,
                                                BanMan* banman, ChainstateManager& chainman,
-                                               CTxMemPool& pool, node::Warnings& warnings, Options opts)
+                                               CTxMemPool& pool, node::Warnings& warnings, Options opts, interfaces::WalletLoader& wallet_loader)
 {
-    return std::make_unique<PeerManagerImpl>(connman, addrman, banman, chainman, pool, warnings, opts);
+    return std::make_unique<PeerManagerImpl>(connman, addrman, banman, chainman, pool, warnings, opts, wallet_loader);
 }
 
 PeerManagerImpl::PeerManagerImpl(CConnman& connman, AddrMan& addrman,
                                  BanMan* banman, ChainstateManager& chainman,
-                                 CTxMemPool& pool, node::Warnings& warnings, Options opts)
+                                 CTxMemPool& pool, node::Warnings& warnings, Options opts, interfaces::WalletLoader& wallet_loader)
     : m_rng{opts.deterministic_rng},
       m_fee_filter_rounder{CFeeRate{DEFAULT_MIN_RELAY_TX_FEE}, m_rng},
       m_chainparams(chainman.GetParams()),
@@ -1895,7 +1955,8 @@ PeerManagerImpl::PeerManagerImpl(CConnman& connman, AddrMan& addrman,
       m_mempool(pool),
       m_txdownloadman(node::TxDownloadOptions{pool, m_rng, opts.deterministic_rng}),
       m_warnings{warnings},
-      m_opts{opts}
+      m_opts{opts},
+      m_wallet_loader{wallet_loader}
 {
     // While Erlay support is incomplete, it must be enabled explicitly via -txreconciliation.
     // This argument can go away after Erlay support is complete.
@@ -2356,6 +2417,18 @@ void PeerManagerImpl::ProcessGetBlockData(CNode& pfrom, Peer& peer, const CInv& 
             peer.m_continuation_block.SetNull();
         }
     }
+}
+
+std::unique_ptr<interfaces::Wallet> PeerManagerImpl::GetQuorumWallet()
+{
+    auto wallets = m_wallet_loader.getWallets();
+    for (auto& wallet : wallets) {
+        // TODO: we should agree on a name for the signing wallet and maybe move it to a constant?
+        if (wallet->getWalletName() == "quorate") {
+            return std::move(wallet);
+        }
+    }
+    return nullptr;
 }
 
 CTransactionRef PeerManagerImpl::FindTxForGetData(const Peer::TxRelay& tx_relay, const GenTxid& gtxid)
@@ -3285,7 +3358,8 @@ void PeerManagerImpl::ProcessGetCFCheckPt(CNode& node, Peer& peer, DataStream& v
 void PeerManagerImpl::ProcessBlock(CNode& node, const std::shared_ptr<const CBlock>& block, bool force_processing, bool min_pow_checked)
 {
     bool new_block{false};
-    m_chainman.ProcessNewBlock(block, force_processing, min_pow_checked, &new_block);
+    // Clean the cache when a new block is connected to the chain
+    if(m_chainman.ProcessNewBlock(block, force_processing, min_pow_checked, &new_block)) psbt_cache.clean_cache();
     if (new_block) {
         node.m_last_block_time = GetTime<std::chrono::seconds>();
         // In case this block came from a different peer than we requested
@@ -3710,6 +3784,53 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
 
         pfrom.fSuccessfullyConnected = true;
         return;
+    }
+
+    if (msg_type == NetMsgType::SIGNETPSBT) {
+        PartiallySignedTransaction psbt;
+        std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>();
+
+        vRecv >> psbt;
+        vRecv >> TX_WITH_WITNESS(*pblock);
+        const uint256 block_hash{pblock->GetHash()};
+
+        // TODO
+        // 1. Validate block template
+        //TODO
+        // 2. Verify that the PSBT commits to the block template according to BIP 325
+
+        // 3. Verify all current signatures in the PSBT (NOT TESTED)
+        bool should_retransmit = psbt_cache.add_signers(block_hash, psbt);
+
+        // Don't retransmit if the block has nothing new.
+        if(!should_retransmit) return;
+        // 4. If the PSBT does not have enough signatures to meet the multisig threshold AND this node has a Quorumeum multisig private key AND it has not signed the PSBT yet, it computes a signature and adds it to the PSBT, updating the message.
+        if(!psbt_cache.m_block_sigs[block_hash].finalized)
+        {
+            std::unique_ptr<interfaces::Wallet> _wallet = GetQuorumWallet();
+            // TODO
+            // 1. Check if our signature is there
+            // 2. If not, add it
+
+            //3. Send the block with the PSBTs
+            m_connman.ForEachNode([&](CNode* pnode) {
+                MakeAndPushMessage(*pnode,
+                NetMsgType::SIGNETPSBT,
+                psbt_cache.m_block_sigs[block_hash].m_bestpsbt,
+                TX_WITH_WITNESS(*pblock));
+            });
+        }
+        // 5. If the PSBT has enough signatures to meet the multisig threshold:
+        else
+        {
+            //TODO - Grind the block header nonce until the proof of work is satisfied
+            //Relay the finished block to peers (untested)
+            m_connman.ForEachNode([&](CNode* pnode) {
+                MakeAndPushMessage(*pnode,
+                NetMsgType::SIGNETPSBT,
+                TX_WITH_WITNESS(*pblock));
+            });
+        }
     }
 
     if (msg_type == NetMsgType::SENDHEADERS) {
