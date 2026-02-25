@@ -7,6 +7,7 @@
 
 #include <rpc/server.h>
 
+#include <clientversion.h>
 #include <common/args.h>
 #include <common/system.h>
 #include <logging.h>
@@ -65,6 +66,14 @@ struct RPCCommandExecution
     }
 };
 
+UniValue CRPCTable::initfederatedsigningsession() const
+{
+    UniValue out(UniValue::VOBJ);
+    out.pushKV("success", "false");
+    out.pushKV("reason", "unimplemented");
+    return out;
+}
+
 std::string CRPCTable::help(const std::string& strCommand, const JSONRPCRequest& helpreq) const
 {
     std::string strRet;
@@ -113,6 +122,21 @@ std::string CRPCTable::help(const std::string& strCommand, const JSONRPCRequest&
         strRet = strprintf("help: unknown command: %s\n", strCommand);
     strRet = strRet.substr(0,strRet.size()-1);
     return strRet;
+}
+
+static RPCHelpMan initfederatedsigningsession()
+{
+    return RPCHelpMan{
+        "initfederatedsigningsession",
+        "Initializes quorumeum federation signing session.\n",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", {}, {}},
+        RPCExamples{""},
+        [&](const RPCHelpMan& self, const JSONRPCRequest& jsonRequest) -> UniValue
+        {
+            return tableRPC.initfederatedsigningsession();
+        },
+    };
 }
 
 static RPCHelpMan help()
@@ -239,6 +263,7 @@ static RPCHelpMan getrpcinfo()
 
 static const CRPCCommand vRPCCommands[]{
     /* Overall control/query calls */
+    {"control", &initfederatedsigningsession},
     {"control", &getrpcinfo},
     {"control", &help},
     {"control", &stop},
