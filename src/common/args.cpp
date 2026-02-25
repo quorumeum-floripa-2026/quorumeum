@@ -8,6 +8,7 @@
 #include <chainparamsbase.h>
 #include <common/settings.h>
 #include <logging.h>
+#include <script/descriptor.h>
 #include <sync.h>
 #include <tinyformat.h>
 #include <univalue.h>
@@ -40,6 +41,7 @@ const char * const BITCOIN_CONF_FILENAME = "bitcoin.conf";
 const char * const BITCOIN_SETTINGS_FILENAME = "settings.json";
 
 ArgsManager gArgs;
+std::unique_ptr<Descriptor> g_descriptor;
 
 /**
  * Interpret a string argument as a boolean.
