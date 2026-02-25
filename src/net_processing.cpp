@@ -45,6 +45,7 @@
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <protocol.h>
+#include <psbt.h>
 #include <random.h>
 #include <scheduler.h>
 #include <script/script.h>
@@ -3828,6 +3829,15 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
 
     if (!pfrom.fSuccessfullyConnected) {
         LogDebug(BCLog::NET, "Unsupported message \"%s\" prior to verack from peer=%d\n", SanitizeString(msg_type), pfrom.GetId());
+        return;
+    }
+
+    if (msg_type == NetMsgType::SIGNETPSBT) {
+        PartiallySignedTransaction psbt;
+        CBlock block;
+        vRecv >> psbt;
+        vRecv >> TX_WITH_WITNESS(block);
+        LogPrintf("Received signetpsbt from peer=%d prevhash=%s\n", pfrom.GetId(), block.hashPrevBlock.ToString());
         return;
     }
 
