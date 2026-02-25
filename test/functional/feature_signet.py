@@ -11,6 +11,9 @@ from test_framework.util import assert_equal
 
 SIGNET_DEFAULT_CHALLENGE = '512103ad5e0edad18cb1f0fc0d28a3d4f1f3e445640337489abb10404f2d1e086be430210359ef5021964fe22d6f8e05b2463c9540ce96883fe3b278760f048f5189f2e6c452ae'
 
+# Test-only tprv for federation_privatekey (required for signet startup)
+TEST_FEDERATION_PRIVATEKEY = 'tprv8ZgxMBicQKsPctz81GgKmkU9KjupnEJQvgq2u7Dm15H7owsaoiBk2hCPJsVUhDchxcmxWKzxfxjNiKJbfN1Y5HRrtHGDE5FVCw73nLbhxzz'
+
 signet_blocks = [
     '00000020f61eee3b63a380a477a063af32b2bbc97c9ff9f01f2c4225e973988108000000f575c83235984e7dc4afc1f30944c170462e84437ab6f2d52e16878a79e4678bd1914d5fae77031eccf4070001010000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff025151feffffff0200f2052a010000001600149243f727dd5343293eb83174324019ec16c2630f0000000000000000776a24aa21a9ede2f61c3f71d1defd3fa999dfa36953755c690689799962b48bebd836974e8cf94c4fecc7daa2490047304402205e423a8754336ca99dbe16509b877ef1bf98d008836c725005b3c787c41ebe46022047246e4467ad7cc7f1ad98662afcaf14c115e0095a227c7b05c5182591c23e7e01000120000000000000000000000000000000000000000000000000000000000000000000000000',
     '00000020533b53ded9bff4adc94101d32400a144c54edc5ed492a3b26c63b2d686000000b38fef50592017cfafbcab88eb3d9cf50b2c801711cad8299495d26df5e54812e7914d5fae77031ecfdd0b0001010000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff025251feffffff0200f2052a01000000160014fd09839740f0e0b4fc6d5e2527e4022aa9b89dfa0000000000000000776a24aa21a9ede2f61c3f71d1defd3fa999dfa36953755c690689799962b48bebd836974e8cf94c4fecc7daa24900473044022031d64a1692cdad1fc0ced69838169fe19ae01be524d831b95fcf5ea4e6541c3c02204f9dea0801df8b4d0cd0857c62ab35c6c25cc47c930630dc7fe723531daa3e9b01000120000000000000000000000000000000000000000000000000000000000000000000000000',
@@ -28,12 +31,13 @@ class SignetParams:
     def __init__(self, challenge=None):
         # Prune to prevent disk space warning on CI systems with limited space,
         # when using networks other than regtest.
+        federation_key_arg = f"-federation_privatekey={TEST_FEDERATION_PRIVATEKEY}"
         if challenge is None:
             self.challenge = SIGNET_DEFAULT_CHALLENGE
-            self.shared_args = ["-prune=550"]
+            self.shared_args = ["-prune=550", federation_key_arg]
         else:
             self.challenge = challenge
-            self.shared_args = ["-prune=550", f"-signetchallenge={challenge}"]
+            self.shared_args = ["-prune=550", f"-signetchallenge={challenge}", federation_key_arg]
 
 class SignetBasicTest(BitcoinTestFramework):
     def set_test_params(self):
@@ -105,8 +109,14 @@ class SignetBasicTest(BitcoinTestFramework):
         with self.nodes[0].assert_debug_log(["Signet derived magic (message start)"]):
             self.restart_node(0)
         self.stop_node(0)
-        self.nodes[0].assert_start_raises_init_error(extra_args=["-signetchallenge=abc"], expected_msg="Error: -signetchallenge must be hex, not 'abc'.")
-        self.nodes[0].assert_start_raises_init_error(extra_args=["-signetchallenge=abc"] * 2, expected_msg="Error: -signetchallenge cannot be multiple values.")
+
+        federation_key_arg = f"-federation_privatekey={TEST_FEDERATION_PRIVATEKEY}"
+        self.nodes[0].assert_start_raises_init_error(extra_args=["-signetchallenge=abc", federation_key_arg], expected_msg="Error: -signetchallenge must be hex, not 'abc'.")
+        self.nodes[0].assert_start_raises_init_error(extra_args=["-signetchallenge=abc", "-signetchallenge=abc", federation_key_arg], expected_msg="Error: -signetchallenge cannot be multiple values.")
+
+        self.log.info("test that signet requires federation_privatekey")
+        self.nodes[0].assert_start_raises_init_error(extra_args=[], expected_msg="Error: -federation_privatekey is required for signet. Set federation_privatekey=<tprv...> in bitcoin.conf under [signet].")
+        self.nodes[0].assert_start_raises_init_error(extra_args=["-federation_privatekey=notavalidkey"], expected_msg="Error: -federation_privatekey is not a valid extended private key.")
 
 
 if __name__ == '__main__':

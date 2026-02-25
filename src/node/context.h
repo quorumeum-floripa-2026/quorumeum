@@ -15,6 +15,7 @@
 class ArgsManager;
 class AddrMan;
 class BanMan;
+struct CExtKey;
 class BaseIndex;
 class CBlockPolicyEstimator;
 class CConnman;
@@ -89,6 +90,8 @@ struct NodeContext {
     std::atomic<int> exit_status{EXIT_SUCCESS};
     //! Manages all the node warnings
     std::unique_ptr<node::Warnings> warnings;
+    //! Federation extended private key for signet block signing (nullptr on non-signet chains)
+    std::unique_ptr<CExtKey> federation_key;
     std::thread background_init_thread;
 
     //! Declare default constructor and destructor that are not inline, so code

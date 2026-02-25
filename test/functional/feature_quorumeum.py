@@ -28,6 +28,9 @@ MULTISIG_KEYS = 100
 # Signer 0 will have unilateral privlege, the taproot internal key
 KEYS = MULTISIG_KEYS + 1
 
+# Test-only tprv for federation_privatekey (required for signet startup)
+TEST_FEDERATION_PRIVATEKEY = 'tprv8ZgxMBicQKsPctz81GgKmkU9KjupnEJQvgq2u7Dm15H7owsaoiBk2hCPJsVUhDchxcmxWKzxfxjNiKJbfN1Y5HRrtHGDE5FVCw73nLbhxzz'
+
 class QuorumeumTest(BitcoinTestFramework):
     def set_test_params(self):
         self.chain = "signet"
@@ -44,7 +47,8 @@ class QuorumeumTest(BitcoinTestFramework):
         # Override setup_network and setup_nodes
         # Because the second node will be on a different signet chain
         # and we don't want it to create a datadir yet
-        self.add_nodes(self.num_nodes, extra_args=[[],["-disablewallet"]])
+        federation_key_arg = f"-federation_privatekey={TEST_FEDERATION_PRIVATEKEY}"
+        self.add_nodes(self.num_nodes, extra_args=[[federation_key_arg],["-disablewallet", federation_key_arg]])
         self.start_nodes()
 
     def skip_test_if_missing_module(self):
@@ -130,7 +134,7 @@ class QuorumeumTest(BitcoinTestFramework):
 
     def switch_nodes(self):
         self.log.info("Starting a node on the new Quorumeum Signet chain")
-        self.restart_node(1, extra_args=[f"-signetchallenge={self.signet_challenge}"], clear_addrman=True)
+        self.restart_node(1, extra_args=[f"-signetchallenge={self.signet_challenge}", f"-federation_privatekey={TEST_FEDERATION_PRIVATEKEY}"], clear_addrman=True)
         assert self.nodes[0].getblockchaininfo()["signet_challenge"] != self.signet_challenge
         self.stop_node(0)
         assert self.nodes[1].getblockchaininfo()["signet_challenge"] == self.signet_challenge
