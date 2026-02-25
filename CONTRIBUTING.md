@@ -1,12 +1,12 @@
-Contributing to Bitcoin Core
+Contributing to Quorumeum
 ============================
 
-The Bitcoin Core project operates an open contributor model where anyone is
+The Quorumeum project operates an open contributor model where anyone is
 welcome to contribute towards development in the form of peer review, testing
 and patches. This document explains the practical process and guidelines for
 contributing.
 
-First, in terms of structure, there is no particular concept of "Bitcoin Core
+First, in terms of structure, there is no particular concept of "Quorumeum
 developers" in the sense of privileged people. Open source often naturally
 revolves around a meritocracy where contributors earn trust from the developer
 community over time. Nevertheless, some hierarchy is necessary for practical
@@ -14,61 +14,12 @@ purposes. As such, there are repository maintainers who are responsible for
 merging pull requests, the [release cycle](/doc/release-process.md), and
 moderation.
 
-Getting Started
----------------
-
-New contributors are very welcome and needed.
-
-Reviewing and testing is highly valued and the most effective way you can contribute
-as a new contributor. It also will teach you much more about the code and
-process than opening pull requests. Please refer to the [peer review](#peer-review)
-section below.
-
-Before you start contributing, familiarize yourself with the Bitcoin Core build
-system and tests. Refer to the documentation in the repository on how to build
-Bitcoin Core and how to run the unit tests, functional tests, and fuzz tests.
-
-There are many open issues of varying difficulty waiting to be fixed.
-If you're looking for somewhere to start contributing, check out the
-[good first issue](https://github.com/bitcoin/bitcoin/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
-list or changes that are
-[up for grabs](https://github.com/bitcoin/bitcoin/issues?utf8=%E2%9C%93&q=label%3A%22Up+for+grabs%22).
-Some of them might no longer be applicable. So if you are interested, but
-unsure, you might want to leave a comment on the issue first.
-
-You may also participate in the [Bitcoin Core PR Review Club](https://bitcoincore.reviews/).
-
-### Good First Issue Label
-
-The purpose of the `good first issue` label is to highlight which issues are
-suitable for a new contributor without a deep understanding of the codebase.
-
-However, good first issues can be solved by anyone. If they remain unsolved
-for a longer time, a frequent contributor might address them.
-
-You do not need to request permission to start working on an issue. However,
-you are encouraged to leave a comment if you are planning to work on it. This
-will help other contributors monitor which issues are actively being addressed
-and is also an effective way to request assistance if and when you need it.
-
 Communication Channels
 ----------------------
 
-Most communication about Bitcoin Core development happens on IRC, in the
-`#bitcoin-core-dev` channel on Libera Chat. The easiest way to participate on IRC is
-with the web client, [web.libera.chat](https://web.libera.chat/#bitcoin-core-dev). Chat
-history logs can be found
-on [https://www.erisian.com.au/bitcoin-core-dev/](https://www.erisian.com.au/bitcoin-core-dev/)
-and [https://gnusha.org/bitcoin-core-dev/](https://gnusha.org/bitcoin-core-dev/).
-
+Most communication about Quorumeum development happens on Discord. You can access it through the following (link)[https://docs.google.com/document/d/1ba3O-EY1P8n4R5VWRu6GeBSWRWNGTPpYc0sc8xfqAKA/edit?tab=t.0].
 Discussion about codebase improvements happens in GitHub issues and pull
 requests.
-
-The developer
-[mailing list](https://groups.google.com/g/bitcoindev)
-should be used to discuss complicated or controversial consensus or P2P protocol changes before working on
-a patch set.
-Archives can be found on [https://gnusha.org/pi/bitcoindev/](https://gnusha.org/pi/bitcoindev/).
 
 
 Contributor Workflow
@@ -84,28 +35,7 @@ To contribute a patch, the workflow is as follows:
   1. Create topic branch
   1. Commit patches
 
-For GUI-related issues or pull requests, the https://github.com/bitcoin-core/gui repository should be used.
-For all other issues and pull requests, the https://github.com/bitcoin/bitcoin node repository should be used.
-
-The master branch for all monotree repositories is identical.
-
-As a rule of thumb, everything that only modifies `src/qt` is a GUI-only pull
-request. However:
-
-* For global refactoring or other transversal changes the node repository
-  should be used.
-* For GUI-related build system changes, the node repository should be used
-  because the change needs review by the build systems reviewers.
-* Changes in `src/interfaces` need to go to the node repository because they
-  might affect other components like the wallet.
-
-For large GUI changes that include build system and interface changes, it is
-recommended to first open a pull request against the GUI repository. When there
-is agreement to proceed with the changes, a pull request with the build system
-and interfaces changes can be submitted to the node repository.
-
-The project coding conventions in the [developer notes](doc/developer-notes.md)
-must be followed.
+To help us organize our limited development time effectively, please open an issue in the repository before starting work on any proposal or patch. This ensures that efforts are coordinated, prevents multiple contributors from working on the same task independently, and makes collaboration easier by allowing contributors to align and combine efforts where appropriate.
 
 ### Committing Patches
 
@@ -171,33 +101,8 @@ mailing list discussions).
 The description for a new pull request should not contain any `@` mentions. The
 PR description will be included in the commit message when the PR is merged and
 any users mentioned in the description will be annoyingly notified each time a
-fork of Bitcoin Core copies the merge. Instead, make any username mentions in a
+fork of Quorumeum copies the merge. Instead, make any username mentions in a
 subsequent comment to the PR.
-
-### Translation changes
-
-Note that translations should not be submitted as pull requests. Please see
-[Translation Process](https://github.com/bitcoin/bitcoin/blob/master/doc/translation_process.md)
-for more information on helping with translations.
-
-### Work in Progress Changes and Requests for Comments
-
-If a pull request is not to be considered for merging (yet), please
-prefix the title with [WIP] or use [Tasks Lists](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#task-lists)
-in the body of the pull request to indicate tasks are pending.
-
-### Address Feedback
-
-At this stage, one should expect comments and review from other contributors. You
-can add more commits to your pull request by committing them locally and pushing
-to your fork.
-
-You are expected to reply to any review comments before your pull request is
-merged. You may update the code or reject the feedback if you do not agree with
-it, but you should express so in a reply. If there is outstanding feedback and
-you are not actively working on it, your pull request may be closed.
-
-Please refer to the [peer review](#peer-review) section below for more details.
 
 ### Squashing Commits
 
@@ -290,11 +195,7 @@ workload on reviewing.
 "Decision Making" Process
 -------------------------
 
-The following applies to code changes to the Bitcoin Core project (and related
-projects such as libsecp256k1), and is not to be confused with overall Bitcoin
-Network Protocol consensus changes.
-
-Whether a pull request is merged into Bitcoin Core rests with the project merge
+Whether a pull request is merged into Quorumeum rests with the project merge
 maintainers.
 
 Maintainers will take into consideration if a patch is in line with the general
@@ -379,38 +280,6 @@ discussed extensively on the mailing list and IRC, be accompanied by a widely
 discussed BIP and have a generally widely perceived technical consensus of being
 a worthwhile change based on the judgement of the maintainers.
 
-### Finding Reviewers
-
-As most reviewers are themselves developers with their own projects, the review
-process can be quite lengthy, and some amount of patience is required. If you find
-that you've been waiting for a pull request to be given attention for several
-months, there may be a number of reasons for this, some of which you can do something
-about:
-
-  - It may be because of a feature freeze due to an upcoming release. During this time,
-    only bug fixes are taken into consideration. If your pull request is a new feature,
-    it will not be prioritized until after the release. Wait for the release.
-  - It may be because the changes you are suggesting do not appeal to people. Rather than
-    nits and critique, which require effort and means they care enough to spend time on your
-    contribution, thundering silence is a good sign of widespread (mild) dislike of a given change
-    (because people don't assume *others* won't actually like the proposal). Don't take
-    that personally, though! Instead, take another critical look at what you are suggesting
-    and see if it: changes too much, is too broad, doesn't adhere to the
-    [developer notes](doc/developer-notes.md), is dangerous or insecure, is messily written, etc.
-    Identify and address any of the issues you find. Then ask e.g. on IRC if someone could give
-    their opinion on the concept itself.
-  - It may be because your code is too complex for all but a few people, and those people
-    may not have realized your pull request even exists. A great way to find people who
-    are qualified and care about the code you are touching is the
-    [Git Blame feature](https://docs.github.com/en/repositories/working-with-files/using-files/viewing-and-understanding-files). Simply
-    look up who last modified the code you are changing and see if you can find
-    them and give them a nudge. Don't be incessant about the nudging, though.
-  - Finally, if all else fails, ask on IRC or elsewhere for someone to give your pull request
-    a look. If you think you've been waiting for an unreasonably long time (say,
-    more than a month) for no particular reason (a few lines changed, etc.),
-    this is totally fine. Try to return the favor when someone else is asking
-    for feedback on their code, and the universe balances out.
-  - Remember that the best thing you can do while waiting is give review to others!
 
 
 Backporting
