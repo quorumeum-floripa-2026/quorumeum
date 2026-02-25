@@ -45,6 +45,7 @@
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <protocol.h>
+#include <psbt.h>
 #include <random.h>
 #include <scheduler.h>
 #include <script/script.h>
@@ -3710,6 +3711,33 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
 
         pfrom.fSuccessfullyConnected = true;
         return;
+    }
+
+    if (msg_type == NetMsgType::SIGNETPSBT) {
+        PartiallySignedTransaction psbt;
+        std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>();
+
+        vRecv >> psbt;
+        vRecv >> TX_WITH_WITNESS(*pblock);
+        // TODO
+        // 1. Validate block template
+
+        // 2. Verify that the PSBT commits to the block template according to BIP 325
+
+        // 3. Verify all current signatures in the PSBT
+
+        // 4. If the PSBT does not have enough signatures to meet the multisig threshold AND this node has a Quorumeum multisig private key AND it has not signed the PSBT yet, it computes a signature and adds it to the PSBT, updating the message.
+
+        // 5. If the PSBT has enough signatures to meet the multisig threshold:
+            // - Grind the block header nonce until the proof of work is satisfied
+            // - Relay the finished block to peers
+
+        // 5.1 Otherwise: Continue to relay the PSBT without further adjustment to peers
+        // for peer in peers:
+            //MakeAndPushMessage(peer, NetMsgType::SIGNETPSBT, blocktemplate);
+        
+        // Adding this just to have something to test for now
+        LogDebug(BCLog::NET, "Processed signetpsbt message from peer=%d\n", pfrom.GetId());
     }
 
     if (msg_type == NetMsgType::SENDHEADERS) {

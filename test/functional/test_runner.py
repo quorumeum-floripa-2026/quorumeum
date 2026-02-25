@@ -283,6 +283,7 @@ BASE_SCRIPTS = [
     # 'mining_mainnet.py',
     'feature_signet.py',
     'feature_quorumeum.py',
+    'feature_signetpsbt_p2p.py',
     # 'p2p_mutated_blocks.py',
     # 'rpc_named_arguments.py',
     # 'feature_startupnotify.py',
