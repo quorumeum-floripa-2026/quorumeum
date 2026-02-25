@@ -131,3 +131,13 @@ disagree with you, your reputation decreases.
 So. Go ahead and use LLMs to do your work. But if you would not trust that work
 with $2,000,000,000,000 of your own money, you can expect your career in Bitcoin
 software development to be insignificant.
+
+# Build and run in a container
+
+```bash
+git clone https://github.com/quorumeum-floripa-2026/quorumeum
+cd quorumeum
+./control.sh build
+./control.sh up
+./control.sh down
+```

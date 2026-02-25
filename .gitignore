@@ -26,3 +26,6 @@ target/
 /guix-build-*
 
 /ci/scratch/
+data
+**/*.swp
+.env
