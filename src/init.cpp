@@ -37,6 +37,7 @@
 #include <kernel/caches.h>
 #include <kernel/context.h>
 #include <key.h>
+#include <key_io.h>
 #include <logging.h>
 #include <mapport.h>
 #include <net.h>
@@ -1358,6 +1359,23 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 {
     const ArgsManager& args = *Assert(node.args);
     const CChainParams& chainparams = Params();
+
+    // Validate and store federation key for signet block signing
+    if (args.GetChainType() == ChainType::SIGNET) {
+        const auto federation_privatekey = args.GetArg("-federation_privatekey");
+        if (!federation_privatekey || federation_privatekey->empty()) {
+            return InitError(Untranslated("-federation_privatekey is required for signet. "
+                "Set federation_privatekey=<tprv...> in bitcoin.conf under [signet]."));
+        }
+
+        CExtKey extkey = DecodeExtKey(*federation_privatekey);
+        if (!extkey.key.IsValid()) {
+            return InitError(Untranslated("-federation_privatekey is not a valid extended private key."));
+        }
+
+        node.federation_key = std::make_unique<CExtKey>(extkey);
+        LogInfo("Federation private key loaded and stored.");
+    }
 
     auto opt_max_upload = ParseByteUnits(args.GetArg("-maxuploadtarget", DEFAULT_MAX_UPLOAD_TARGET), ByteUnit::M);
     if (!opt_max_upload) {
