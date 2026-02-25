@@ -81,30 +81,22 @@ def send_signetpsbt(args, psbt_obj, block):
     net_thread = NetworkThread()
     net_thread.start()
     peer = P2PInterface()
-    try:
-        create_conn = peer.peer_connect(
-            dstaddr=args.p2p_host,
-            dstport=args.p2p_port,
-            net="signet",
-            timeout_factor=1,
-            send_version=True,
-            supports_v2_p2p=False,
-        )
-        create_conn()
-        peer.wait_for_connect(timeout=10)
-        time.sleep(0.5)
+    create_conn = peer.peer_connect(
+        dstaddr=args.p2p_host,
+        dstport=args.p2p_port,
+        net="signet",
+        timeout_factor=1,
+        send_version=True,
+        supports_v2_p2p=False,
+    )
+    create_conn()
+    peer.wait_for_connect(timeout=10)
+    time.sleep(0.5)
 
-        msg = msg_signetpsbt(psbt_obj, block)
-        peer.send_without_ping(msg)
-        logging.info("signetpsbt sent to %s:%d", args.p2p_host, args.p2p_port)
-        time.sleep(0.5)
-        return True
-    except Exception as e:
-        logging.error("P2P send failed: %s", e)
-        return False
-    finally:
-        peer.peer_disconnect()
-        net_thread.close()
+    msg = msg_signetpsbt(psbt_obj, block)
+    peer.send_without_ping(msg)
+    logging.info("signetpsbt sent to %s:%d", args.p2p_host, args.p2p_port)
+    time.sleep(0.5)
 
 
 def initiate_signing_round(args, bci):
@@ -113,7 +105,7 @@ def initiate_signing_round(args, bci):
 
     if tmpl["previousblockhash"] != bci["bestblockhash"]:
         logging.warning("Chain advanced during round setup, skipping")
-        return False
+        return
 
     signet_spk = tmpl["signet_challenge"]
     _, reward_spk = SignetMiner.get_reward_addr_spk(args, tmpl["height"])
@@ -128,7 +120,7 @@ def initiate_signing_round(args, bci):
 
     logging.info("PSBT partially signed; broadcasting for co-signers")
     psbt_obj = PSBT.from_base64(signed_b64)
-    return send_signetpsbt(args, psbt_obj, block)
+    send_signetpsbt(args, psbt_obj, block)
 
 
 def do_bootstrap(args):
@@ -157,8 +149,7 @@ def do_bootstrap(args):
 
             logging.info("No new block for %.0fs; initiating signing round", stale_for)
 
-            if initiate_signing_round(args, bci):
-                time.sleep(args.timeout)
+            initiate_signing_round(args, bci)
         except Exception as e:
             logging.error("Error: %s; retrying in 5s", e)
 
