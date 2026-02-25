@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+# Copyright (c) The Quorumeum developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+"""Bootstrap signing round initiator for Quorumeum signet.
+
+Monitors the chain tip and initiates a signing round when no new block
+has been produced for a configurable timeout (default 60 seconds).
+Creates a block template, generates and locally signs a PSBT, then
+broadcasts it to the network via the signetpsbt P2P message.
+"""
+
+import argparse
+import importlib.machinery
+import importlib.util
+import json
+import logging
+import os
+import shlex
+import subprocess
+import sys
+import time
+
+PATH_BASE_CONTRIB_SIGNET = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
+PATH_BASE_TEST_FUNCTIONAL = os.path.abspath(
+    os.path.join(PATH_BASE_CONTRIB_SIGNET, "..", "..", "test", "functional"))
+sys.path.insert(0, PATH_BASE_TEST_FUNCTIONAL)
+
+# Import the signet miner module (no .py extension)
+_miner_path = os.path.join(PATH_BASE_CONTRIB_SIGNET, "miner")
+_loader = importlib.machinery.SourceFileLoader("miner", _miner_path)
+_spec = importlib.util.spec_from_loader(_loader.name, _loader)
+SignetMiner = importlib.util.module_from_spec(_spec)
+_loader.exec_module(SignetMiner)
+
+from test_framework.p2p import P2PInterface, NetworkThread
+from test_framework.psbt import PSBT
+
+logging.basicConfig(
+    format="%(asctime)s %(levelname)s %(message)s",
+    level=logging.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+
+class msg_signetpsbt:
+    """P2P message carrying a partially-signed PSBT and block template."""
+    __slots__ = ("psbt", "block")
+    msgtype = b"signetpsbt"
+
+    def __init__(self, psbt_obj=None, block_obj=None):
+        self.psbt = psbt_obj
+        self.block = block_obj
+
+    def serialize(self):
+        return self.psbt.serialize() + self.block.serialize()
+
+    def deserialize(self, f):
+        raise NotImplementedError
+
+    def __repr__(self):
+        return "msg_signetpsbt()"
+
+
+def bitcoin_cli(basecmd, args, **kwargs):
+    cmd = basecmd + ["-signet"] + args
+    logging.debug("bitcoin-cli: %s", " ".join(cmd))
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, **kwargs, check=True).stdout
+    if isinstance(out, bytes):
+        out = out.decode("utf8")
+    return out.strip()
+
+
+def send_signetpsbt(args, psbt_obj, block):
+    """Connect to the local node via P2P and send the signetpsbt message."""
+    net_thread = NetworkThread()
+    net_thread.start()
+    peer = P2PInterface()
+    try:
+        create_conn = peer.peer_connect(
+            dstaddr=args.p2p_host,
+            dstport=args.p2p_port,
+            net="signet",
+            timeout_factor=1,
+            send_version=True,
+            supports_v2_p2p=False,
+        )
+        create_conn()
+        peer.wait_for_connect(timeout=10)
+        time.sleep(0.5)
+
+        msg = msg_signetpsbt(psbt_obj, block)
+        peer.send_without_ping(msg)
+        logging.info("signetpsbt sent to %s:%d", args.p2p_host, args.p2p_port)
+        time.sleep(0.5)
+        return True
+    except Exception as e:
+        logging.error("P2P send failed: %s", e)
+        return False
+    finally:
+        peer.peer_disconnect()
+        net_thread.close()
+
+
+def initiate_signing_round(args, bci):
+    """Create a block template, sign a PSBT, and broadcast or submit."""
+    try:
+        tmpl = json.loads(args.bcli("getblocktemplate", '{"rules":["signet","segwit"]}'))
+    except subprocess.CalledProcessError as e:
+        logging.error("getblocktemplate failed: %s", e)
+        return False
+
+    if tmpl["previousblockhash"] != bci["bestblockhash"]:
+        logging.warning("Chain advanced during round setup, skipping")
+        return False
+
+    signet_spk = tmpl["signet_challenge"]
+
+    try:
+        _, reward_spk = SignetMiner.get_reward_addr_spk(args, tmpl["height"])
+    except Exception as e:
+        logging.error("Failed to derive reward address: %s", e)
+        return False
+
+    block = SignetMiner.new_block(tmpl, reward_spk)
+    psbt_b64 = SignetMiner.generate_psbt(block, signet_spk)
+
+    try:
+        input_stream = os.linesep.join([psbt_b64, "true", "ALL"]).encode("utf8")
+        signed = json.loads(args.bcli("-stdin", "walletprocesspsbt", input=input_stream))
+    except subprocess.CalledProcessError as e:
+        logging.error("walletprocesspsbt failed: %s", e)
+        return False
+
+    signed_b64 = signed["psbt"]
+    is_complete = signed.get("complete", False)
+
+    if is_complete:
+        logging.info("PSBT complete after local signing; finalizing block")
+        decoded = SignetMiner.decode_challenge_psbt(signed_b64)
+        solution = SignetMiner.get_solution_from_psbt(decoded)
+        finished = SignetMiner.finish_block(block, solution, args.grind_cmd)
+        r = args.bcli("-stdin", "submitblock", input=finished.serialize().hex().encode("utf8"))
+        logging.info("submitblock returned: %s", r if r else "(empty, success)")
+        return True
+
+    logging.info("PSBT partially signed; broadcasting for co-signers")
+    psbt_obj = PSBT.from_base64(signed_b64)
+    return send_signetpsbt(args, psbt_obj, block)
+
+
+def do_bootstrap(args):
+    """Main loop: monitor chain tip and trigger signing rounds."""
+    bestheader_hash = None
+    last_block_time = time.time()
+
+    logging.info("Bootstrap started (timeout=%ds)", args.timeout)
+
+    while True:
+        try:
+            bci = json.loads(args.bcli("getblockchaininfo"))
+        except subprocess.CalledProcessError as e:
+            logging.error("getblockchaininfo failed: %s; retrying in 5s", e)
+            time.sleep(5)
+            continue
+
+        current_best = bci["bestblockhash"]
+
+        if current_best != bestheader_hash:
+            bestheader_hash = current_best
+            last_block_time = time.time()
+            logging.info("Block at height %d (%s...)", bci["blocks"], current_best[:12])
+
+        stale_for = time.time() - last_block_time
+
+        if stale_for < args.timeout:
+            sleep_for = min(args.timeout - stale_for, 10)
+            time.sleep(sleep_for)
+            continue
+
+        logging.info("No new block for %.0fs; initiating signing round", stale_for)
+
+        if initiate_signing_round(args, bci):
+            time.sleep(args.timeout)
+        else:
+            time.sleep(5)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Quorumeum bootstrap: initiates signet signing rounds")
+    parser.add_argument("--cli", default="bitcoin-cli", type=str,
+                        help="bitcoin-cli command (default: bitcoin-cli)")
+    parser.add_argument("--p2p-host", default="127.0.0.1", type=str,
+                        help="Local node P2P host (default: 127.0.0.1)")
+    parser.add_argument("--p2p-port", required=True, type=int,
+                        help="Local node P2P port")
+    parser.add_argument("--timeout", default=60, type=int,
+                        help="Seconds without a block before triggering (default: 60)")
+    parser.add_argument("--grind-cmd", default=None, type=str,
+                        help="PoW grind command (for internal key fast-path)")
+    parser.add_argument("--debug", action="store_true",
+                        help="Enable debug logging")
+    parser.add_argument("--quiet", action="store_true",
+                        help="Only log warnings and errors")
+
+    payto = parser.add_mutually_exclusive_group(required=True)
+    payto.add_argument("--address", default=None, type=str,
+                       help="Coinbase reward address")
+    payto.add_argument("--descriptor", default=None, type=str,
+                       help="Coinbase reward descriptor")
+
+    args = parser.parse_args()
+
+    args.bcli = lambda *a, input=b"", **kwargs: bitcoin_cli(
+        shlex.split(args.cli), list(a), input=input, **kwargs)
+    args.derived_addresses = {}
+
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+    elif args.quiet:
+        logging.getLogger().setLevel(logging.WARNING)
+
+    do_bootstrap(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main() or 0)
