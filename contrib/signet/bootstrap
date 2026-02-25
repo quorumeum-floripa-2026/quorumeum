@@ -161,6 +161,8 @@ def main():
         description="Quorumeum bootstrap: initiates signet signing rounds")
     parser.add_argument("--cli", default="bitcoin-cli", type=str,
                         help="bitcoin-cli command (default: bitcoin-cli)")
+    parser.add_argument("--cliarg", action="append", default=[],
+                        help="Additional arguments to forward to bitcoin-cli. May be specified multiple times, each as a single string (will be split on spaces).")
     parser.add_argument("--p2p-host", default="127.0.0.1", type=str,
                         help="Local node P2P host (default: 127.0.0.1)")
     parser.add_argument("--p2p-port", default=38333, type=int,
@@ -174,7 +176,9 @@ def main():
         shlex.split(args.cli), list(a), input=input, **kwargs)
     args.derived_addresses = {}
 
-    logging.getLogger().setLevel(logging.DEBUG)
+    cliargs = sum([shlex.split(x) for x in args.cliarg], [])
+    args.bcli = lambda *a, input=b"", **kwargs: bitcoin_cli(
+        shlex.split(args.cli) + cliargs, list(a), input=input, **kwargs)
 
     do_bootstrap(args)
 
