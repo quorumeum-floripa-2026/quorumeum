@@ -3,6 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "psbt.h"
 #include <net_processing.h>
 
 #include <addrman.h>
@@ -3710,6 +3711,51 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
 
         pfrom.fSuccessfullyConnected = true;
         return;
+    }
+
+    if (msg_type == NetMsgType::SIGNETPSBT) {
+        PartiallySignedTransaction psbt;
+        std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>();
+
+        vRecv >> psbt;
+
+        std::string decode_error;
+        std::vector<uint8_t> signet_block_key;
+        static constexpr std::string_view SIGNET_ID{"signetb"};
+        signet_block_key.push_back(0xFC);
+        signet_block_key.push_back(0x06);
+        signet_block_key.insert(
+            signet_block_key.end(),
+            SIGNET_ID.begin(),
+            SIGNET_ID.end()
+        );
+
+        // TODO: change to use psbt m_propietary field
+        auto block_bytes = psbt.unknown.find(signet_block_key);
+
+        if (block_bytes == psbt.unknown.end()) {
+            LogDebug(BCLog::NET, "peer=%d PSBT missing PSBT_SIGNET_BLOCK field\n", pfrom.GetId());
+            return;
+        }
+
+        CBlock& block = *pblock;
+        try {
+            DataStream block_stream{block_bytes->second};
+            block_stream >> TX_WITH_WITNESS(block);  // standard CBlock deserialization
+        } catch (const std::exception& e) {
+            LogDebug(BCLog::NET, "peer=%d failed to deserialize signet block: %s\n",
+            pfrom.GetId(), e.what());
+            return;
+        }
+
+        LogDebug(BCLog::NET, "received block %s", pblock->GetHash().ToString());
+
+        BlockValidationState state;
+        if (!CheckBlock(block, state, m_chainman.GetParams().GetConsensus())) {
+            LogDebug(BCLog::NET, "peer=%d signet block failed CheckBlock: %s\n",
+            pfrom.GetId(), state.GetRejectReason());
+            return;
+        }
     }
 
     if (msg_type == NetMsgType::SENDHEADERS) {
