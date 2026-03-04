@@ -1,0 +1,117 @@
+#compdef bitcoin-cli
+# zsh completion for bitcoin-cli(1)
+# Copyright (c) 2023 The Bitcoin Core developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+_bitcoin_rpc() {
+    local -a rpcargs
+    local i
+    for i in "${words[@]}"; do
+        case "$i" in
+            -conf=*|-datadir=*|-regtest|-rpc*|-testnet|-testnet4)
+                rpcargs+=("$i")
+                ;;
+        esac
+    done
+    "${words[1]}" "${rpcargs[@]}" "$@"
+}
+
+_bitcoin_cli() {
+    local cmd="${words[1]}"
+    local -a opts commands
+
+    case "${words[CURRENT]}" in
+        -conf=*)
+            _files
+            return
+            ;;
+        -datadir=*)
+            _files -/
+            return
+            ;;
+        -*=*)
+            return
+            ;;
+    esac
+
+    local -a bool_vals sighash_vals action_vals setban_vals
+    bool_vals=(true false)
+    sighash_vals=(ALL NONE SINGLE 'ALL|ANYONECANPAY' 'NONE|ANYONECANPAY' 'SINGLE|ANYONECANPAY')
+    action_vals=(add remove onetry)
+    setban_vals=(add remove)
+
+    if ((CURRENT > 6)); then
+        case "${words[CURRENT-5]}" in
+            sendtoaddress)
+                _describe 'values' bool_vals
+                return
+                ;;
+        esac
+    fi
+
+    if ((CURRENT > 5)); then
+        case "${words[CURRENT-4]}" in
+            listtransactions|setban)
+                _describe 'values' bool_vals
+                return
+                ;;
+            signrawtransactionwithkey|signrawtransactionwithwallet)
+                _describe 'sighash' sighash_vals
+                return
+                ;;
+        esac
+    fi
+
+    if ((CURRENT > 4)); then
+        case "${words[CURRENT-3]}" in
+            getbalance|gettxout|listreceivedbyaddress|listsinceblock)
+                _describe 'values' bool_vals
+                return
+                ;;
+        esac
+    fi
+
+    if ((CURRENT > 3)); then
+        case "${words[CURRENT-2]}" in
+            addnode)
+                _describe 'actions' action_vals
+                return
+                ;;
+            setban)
+                _describe 'actions' setban_vals
+                return
+                ;;
+            fundrawtransaction|getblock|getblockheader|getmempoolancestors|getmempooldescendants|getrawtransaction|gettransaction|listreceivedbyaddress|sendrawtransaction)
+                _describe 'values' bool_vals
+                return
+                ;;
+        esac
+    fi
+
+    case "${words[CURRENT-1]}" in
+        backupwallet)
+            _files
+            return
+            ;;
+        getaddednodeinfo|getrawmempool|lockunspent)
+            _describe 'values' bool_vals
+            return
+            ;;
+        getbalance|getnewaddress|listtransactions|sendmany)
+            return
+            ;;
+    esac
+
+    if [[ -z "${words[CURRENT]}" || "${words[CURRENT]}" == -* ]]; then
+        opts=(${(f)"$($cmd -help 2>&1 | awk '$1 ~ /^-/ { sub(/=.*/, "="); print $1 }')"})
+        _describe 'options' opts
+    fi
+
+    if [[ -z "${words[CURRENT]}" || "${words[CURRENT]}" =~ ^[a-z] ]]; then
+        commands=(${(f)"$(_bitcoin_rpc help 2>/dev/null | awk '$1 ~ /^[a-z]/ { print $1 }')"})
+        _describe 'commands' commands
+    fi
+}
+
+_bitcoin_cli "$@"
